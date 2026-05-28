@@ -51,25 +51,296 @@ function formatDate(dateString) {
   return `${day} ${monthName} ${year}`;
 }
 
-// Voeg stijlen in voor datumweergave
-function injectStyles() {
-  const style = document.createElement('style');
-  style.textContent = `
-    .stagemarkt-posted-date {
-      display: block;
-      background-color: #e8f4f8;
-      border-left: 4px solid #3498db;
-      color: #2c3e50;
-      padding: 12px;
-      border-radius: 4px;
-      font-size: 14px;
-      font-weight: 500;
-      margin: 20px;
-      margin-top: 15px;
-    }
-  `;
-  document.head.appendChild(style);
+function formatRangeValue(value) {
+  const number = Number(value);
+  if (Number.isNaN(number)) {
+    return '5';
+  }
+
+  return String(Math.min(75, Math.max(5, number)));
 }
+
+const allowedRangeValues = [5, 10, 15, 25, 50, 75];
+
+function snapRangeValue(value) {
+  const numericValue = Number(formatRangeValue(value));
+  let nearestValue = allowedRangeValues[0];
+  let smallestDistance = Math.abs(numericValue - nearestValue);
+
+  for (const allowedValue of allowedRangeValues) {
+    const distance = Math.abs(numericValue - allowedValue);
+    if (distance < smallestDistance) {
+      nearestValue = allowedValue;
+      smallestDistance = distance;
+    }
+  }
+
+  return String(nearestValue);
+}
+
+function getCurrentRangeValue() {
+  const params = new URLSearchParams(window.location.search);
+  return snapRangeValue(params.get('range') || '75');
+}
+
+function updateRangeInUrl(value) {
+  const nextUrl = new URL(window.location.href);
+  nextUrl.searchParams.set('range', snapRangeValue(value));
+  window.location.href = nextUrl.toString();
+}
+
+function startRangeFilterObserver() {
+  if (window.__stagemarktRangeFilterObserverStarted) {
+    return;
+  }
+
+  window.__stagemarktRangeFilterObserverStarted = true;
+
+  const scheduleInject = debounce(() => {
+    injectRangeFilter();
+  }, 50);
+
+  const observer = new MutationObserver(() => {
+    if (window.location.pathname === '/stages' || window.location.pathname === '/stages/') {
+      scheduleInject();
+    }
+  });
+
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true
+  });
+
+  window.__stagemarktRangeFilterObserver = observer;
+}
+
+function ensureStagemarktPageClass() {
+  document.body.classList.add('stagemarkt-plus-page');
+}
+
+function injectRangeFilter() {
+  if (window.location.pathname !== '/stages' && window.location.pathname !== '/stages/') {
+    return;
+  }
+
+  if (document.querySelector('.stagemarkt-range-filter')) {
+    return;
+  }
+
+  const keywordSearch = document.querySelector('.search-field.keyword-search-field');
+  const filterBar = document.querySelector('.filter-bar-container.items-start .filter-bar-container.flex-wrap');
+
+  if (!keywordSearch || !filterBar) {
+    return;
+  }
+
+  const rangeFilter = document.createElement('div');
+  rangeFilter.className = 'search-field stagemarkt-range-filter';
+  rangeFilter.setAttribute('data-v-b1cec4bb', '');
+  rangeFilter.setAttribute('data-v-e442821d', '');
+
+  const header = document.createElement('div');
+  header.className = 'stagemarkt-range-header';
+
+  const title = document.createElement('span');
+  title.className = 'stagemarkt-range-title';
+  title.textContent = 'Bereik';
+
+  const value = document.createElement('span');
+  value.className = 'stagemarkt-range-value';
+  value.textContent = `${getCurrentRangeValue()}`;
+
+  header.appendChild(title);
+  header.appendChild(value);
+
+  const track = document.createElement('div');
+  track.className = 'stagemarkt-range-track';
+
+  const minLabel = document.createElement('span');
+  minLabel.className = 'stagemarkt-range-min';
+  minLabel.textContent = '5';
+
+  const rangeInput = document.createElement('input');
+  rangeInput.type = 'range';
+  rangeInput.min = '5';
+  rangeInput.max = '75';
+  rangeInput.value = getCurrentRangeValue();
+  rangeInput.setAttribute('aria-label', 'Filter van 5 tot 75');
+  rangeInput.setAttribute('list', 'stagemarkt-range-values');
+
+  const dataList = document.createElement('datalist');
+  dataList.id = 'stagemarkt-range-values';
+  allowedRangeValues.forEach((allowedValue) => {
+    const option = document.createElement('option');
+    option.value = String(allowedValue);
+    dataList.appendChild(option);
+  });
+
+  const maxLabel = document.createElement('span');
+  maxLabel.className = 'stagemarkt-range-max';
+  maxLabel.textContent = '75';
+
+  rangeInput.addEventListener('input', () => {
+    const formattedValue = snapRangeValue(rangeInput.value);
+    rangeInput.value = formattedValue;
+    value.textContent = `${formattedValue}`;
+  });
+
+  rangeInput.addEventListener('change', () => {
+    updateRangeInUrl(rangeInput.value);
+  });
+
+  track.appendChild(minLabel);
+  track.appendChild(rangeInput);
+  track.appendChild(maxLabel);
+
+  rangeFilter.appendChild(header);
+  rangeFilter.appendChild(track);
+  rangeFilter.appendChild(dataList);
+
+  keywordSearch.insertAdjacentElement('afterend', rangeFilter);
+}
+
+// --- Form copy/paste helpers ---
+function isMessageField(el) {
+  if (!el) return false;
+  const name = (el.name || '').toLowerCase();
+  const id = (el.id || '').toLowerCase();
+  if (el.tagName === 'TEXTAREA') {
+    if (name.includes('bericht') || name.includes('motivatie') || id.includes('bericht') || id.includes('motivatie')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function collectFormData(form) {
+  const data = {};
+  Array.from(form.elements).forEach((el) => {
+    if (!el.name && !el.id) return;
+    if (el.type === 'file') return;
+    if (isMessageField(el)) return; // skip message/motivation field  
+
+    const key = el.name || el.id;
+    if (el.tagName === 'INPUT') {
+      const type = (el.type || '').toLowerCase();
+      if (type === 'checkbox') {
+        data[key] = el.checked;
+      } else if (type === 'radio') {
+        if (el.checked) data[key] = el.value;
+      } else {
+        data[key] = el.value;
+      }
+    } else if (el.tagName === 'SELECT') {
+      data[key] = el.value;
+    } else if (el.tagName === 'TEXTAREA') {
+      data[key] = el.value;
+    }
+  });
+  return data;
+}
+
+function fillFormWithData(form, data) {
+  if (!data) return;
+  Array.from(form.elements).forEach((el) => {
+    if (!el.name && !el.id) return;
+    if (isMessageField(el)) return; // don't overwrite message
+
+    const key = el.name || el.id;
+    if (!(key in data)) return;
+
+    try {
+      if (el.tagName === 'INPUT') {
+        const type = (el.type || '').toLowerCase();
+        if (type === 'checkbox') {
+          el.checked = !!data[key];
+        } else if (type === 'radio') {
+          el.checked = (el.value === data[key]);
+        } else {
+          el.value = data[key];
+        }
+      } else if (el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') {
+        el.value = data[key];
+      }
+    } catch (e) {
+      console.warn('[Stagemarkt+] Kon veld niet invullen', key, e);
+    }
+  });
+}
+
+function createFormButtons(form) {
+  if (form.querySelector('.stagemarkt-copy-row')) return;
+
+  const row = document.createElement('div');
+  row.className = 'stagemarkt-copy-row';
+  row.style.display = 'flex';
+  row.style.gap = '8px';
+  row.style.marginTop = '12px';
+
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  copyBtn.className = 'stagemarkt-action-button stagemarkt-copy-btn';
+  copyBtn.textContent = 'Kopieer gegevens';
+
+  const pasteBtn = document.createElement('button');
+  pasteBtn.type = 'button';
+  pasteBtn.className = 'stagemarkt-action-button stagemarkt-paste-btn';
+  pasteBtn.textContent = 'Plak gegevens';
+
+  copyBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    const data = collectFormData(form);
+    try {
+      chrome.storage.local.set({ stagemarktSavedApplicant: data }, () => {
+        copyBtn.textContent = 'Gekopieerd';
+        setTimeout(() => (copyBtn.textContent = 'Kopieer gegevens'), 1200);
+      });
+    } catch (err) {
+      console.error('[Stagemarkt+] Opslaan mislukt', err);
+    }
+  });
+
+  pasteBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    chrome.storage.local.get('stagemarktSavedApplicant', (res) => {
+      const saved = res && res.stagemarktSavedApplicant;
+      if (saved) {
+        fillFormWithData(form, saved);
+        pasteBtn.textContent = 'Gepakt';
+        setTimeout(() => (pasteBtn.textContent = 'Plak gegevens'), 1200);
+      } else {
+        pasteBtn.textContent = 'Geen gegevens';
+        setTimeout(() => (pasteBtn.textContent = 'Plak gegevens'), 1200);
+      }
+    });
+  });
+
+  row.appendChild(copyBtn);
+  row.appendChild(pasteBtn);
+
+  // Insert at the top of the form
+  form.insertBefore(row, form.firstChild);
+}
+
+function injectFormButtonsIntoPage() {
+  const forms = document.querySelectorAll('form');
+  forms.forEach((form) => {
+    // Only attach to forms that look like application forms (contain name/email/telefoon)
+    const hasName = form.querySelector('input[name*="naam"], input[id*="naam"], input[placeholder*="naam"]');
+    const hasEmail = form.querySelector('input[type="email"], input[name*="email"]');
+    const hasPhone = form.querySelector('input[type="tel"], input[name*="telefoon"]');
+    if (hasName || hasEmail || hasPhone) {
+      createFormButtons(form);
+    }
+  });
+}
+
+// Observe DOM to attach buttons when forms render dynamically
+const formObserver = new MutationObserver(debounce(() => {
+  injectFormButtonsIntoPage();
+}, 200));
+formObserver.observe(document.documentElement, { childList: true, subtree: true });
+
 
 // Geef datum weer op individuele stagepagina
 function displayDateOnDetailPage() {
@@ -208,16 +479,19 @@ console.log('[Stagemarkt+] Inhoudscript initialiseert...');
 if (isOnStagemarkt()) {
   console.log('[Stagemarkt+] Aan het injecteren op stagemarkt.nl');
   
-  injectStyles();
+  ensureStagemarktPageClass();
+  startRangeFilterObserver();
   
   // Voer direct uit
   displayDateOnDetailPage();
   handleSearchPage();
+  injectRangeFilter();
   
   // Herhaal elke 2 seconden voor dynamische content
   setInterval(() => {
     displayDateOnDetailPage();
     handleSearchPage();
+    injectRangeFilter();
   }, 2000);
 } else {
   console.log('[Stagemarkt+] Niet op stagemarkt.nl, script inactief');
