@@ -38,13 +38,17 @@ function getPostedDateFromPage() {
   return null;
 }
 
-// Formateer datum naar DD:MM:YYYY
+// Formateer datum naar "D maandnaam YYYY" (bijv. "23 mei 2026")
 function formatDate(dateString) {
   const date = new Date(dateString);
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = date.getDate();
   const year = date.getFullYear();
-  return `${day}:${month}:${year}`;
+  const months = [
+    'januari','februari','maart','april','mei','juni',
+    'juli','augustus','september','oktober','november','december'
+  ];
+  const monthName = months[date.getMonth()];
+  return `${day} ${monthName} ${year}`;
 }
 
 // Voeg stijlen in voor datumweergave
@@ -165,7 +169,7 @@ function handleSearchPage() {
                       
                       const textSpan = document.createElement('span');
                       textSpan.setAttribute('data-v-9d5e9195', '');
-                      textSpan.textContent = `Geplaatst: ${formattedDate}`;
+                      textSpan.textContent = `Geplaatst op: ${formattedDate}`;
                       
                       datePill.appendChild(iconSpan);
                       datePill.appendChild(textSpan);
