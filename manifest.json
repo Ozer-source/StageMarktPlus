@@ -28,6 +28,11 @@
     "48": "images/icon-48.png",
     "128": "images/icon-128.png"
   },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "stagemarktplus@stagemarkt.nl"
+    }
+  },
   "content_scripts": [
     {
       "matches": ["https://stagemarkt.nl/*"],

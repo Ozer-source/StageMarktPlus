@@ -18,6 +18,12 @@ stagemarkt.nl bevat plaatsingsdatums in de paginabron (JSON-LD schema) maar geef
 
 ## Installatie
 
+### Voor Firefox:
+1. Open Firefox en ga naar `about:debugging#/runtime/this-firefox`
+2. Klik op "Tijdelijke add-on laden"
+3. Selecteer het bestand `manifest.json` uit deze map
+4. De extensie wordt direct geladen en blijft actief tot Firefox opnieuw wordt gestart
+
 ### Voor Edge:
 1. Open `edge://extensions/`
 2. Schakel "Ontwikkelaarsmodus" in (linker zijbalk)
